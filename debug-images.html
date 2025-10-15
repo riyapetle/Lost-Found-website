@@ -1,0 +1,199 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Image Debug - Campus Lost & Found</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .item { border: 1px solid #ccc; padding: 15px; margin: 10px 0; border-radius: 8px; }
+        .image-debug { background: #f0f0f0; padding: 10px; margin: 10px 0; border-radius: 4px; }
+        .success { color: green; }
+        .error { color: red; }
+        .info { color: blue; }
+        img { max-width: 200px; max-height: 200px; border: 2px solid #ddd; }
+        .photo-url { font-family: monospace; background: #f9f9f9; padding: 5px; word-break: break-all; }
+    </style>
+</head>
+<body>
+    <h1>Image Debug Tool</h1>
+    <p>This tool helps debug why images aren't showing in the dashboard.</p>
+    
+    <button onclick="debugImages()">Debug Images</button>
+    <button onclick="testCloudinaryUpload()">Test Cloudinary Upload (Fixed)</button>
+    <button onclick="testLocalUpload()">Test Local Upload (Guaranteed)</button>
+    
+    <div id="results"></div>
+
+    <script src="js/supabase.js"></script>
+    <script src="js/cloudinary.js"></script>
+    <script src="js/local-image.js"></script>
+    
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = type;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+
+        async function debugImages() {
+            document.getElementById('results').innerHTML = '';
+            log('🔍 Starting image debug...', 'info');
+            
+            try {
+                const items = await SupabaseAPI.getItems();
+                log(`✅ Found ${items.length} total items`, 'success');
+                
+                const lostItems = items.filter(item => item.status === 'Lost');
+                log(`📦 Found ${lostItems.length} lost items`, 'info');
+                
+                lostItems.forEach((item, index) => {
+                    log(`<div class="item">
+                        <h3>Lost Item #${index + 1}: ${item.name}</h3>
+                        <div class="image-debug">
+                            <strong>Photo URL:</strong><br>
+                            <div class="photo-url">${item.photo_url || 'NULL/EMPTY'}</div>
+                            <br>
+                            <strong>URL Type:</strong> ${typeof item.photo_url}<br>
+                            <strong>URL Length:</strong> ${item.photo_url ? item.photo_url.length : 0}<br>
+                            <strong>Is Valid URL:</strong> ${isValidUrl(item.photo_url)}<br>
+                            <br>
+                            ${item.photo_url ? `
+                                <strong>Image Test:</strong><br>
+                                <img src="${item.photo_url}" 
+                                     onload="console.log('✅ Image loaded:', '${item.name}')" 
+                                     onerror="console.log('❌ Image failed:', '${item.name}', '${item.photo_url}')"
+                                     alt="${item.name}">
+                                <br><br>
+                                <strong>Direct Link Test:</strong> 
+                                <a href="${item.photo_url}" target="_blank">Click to open image</a>
+                            ` : '<em>No photo URL available</em>'}
+                        </div>
+                        <strong>Other Details:</strong><br>
+                        Description: ${item.description}<br>
+                        Location: ${item.location}<br>
+                        Date: ${item.date}<br>
+                        Created: ${item.created_at}
+                    </div>`, 'info');
+                });
+                
+            } catch (error) {
+                log(`❌ Error: ${error.message}`, 'error');
+            }
+        }
+        
+        function isValidUrl(string) {
+            try {
+                new URL(string);
+                return true;
+            } catch (_) {
+                return false;
+            }
+        }
+        
+        async function testCloudinaryUpload() {
+            log('🧪 Testing Fixed Cloudinary upload...', 'info');
+            
+            // Create a test canvas image
+            const canvas = document.createElement('canvas');
+            canvas.width = 200;
+            canvas.height = 200;
+            const ctx = canvas.getContext('2d');
+            
+            // Draw a simple test image
+            ctx.fillStyle = '#4CAF50';
+            ctx.fillRect(0, 0, 200, 200);
+            ctx.fillStyle = '#fff';
+            ctx.font = '20px Arial';
+            ctx.fillText('TEST IMAGE', 50, 100);
+            ctx.fillText(new Date().toLocaleTimeString(), 30, 130);
+            
+            // Convert to blob
+            canvas.toBlob(async (blob) => {
+                try {
+                    const file = new File([blob], 'test-image.png', { type: 'image/png' });
+                    log(`📸 Created test image: ${file.name} (${file.size} bytes)`, 'info');
+                    
+                    const imageUrl = await CloudinaryAPI.uploadImage(file);
+                    log(`✅ Upload successful!<br>URL: <div class="photo-url">${imageUrl}</div>`, 'success');
+                    log(`<img src="${imageUrl}" alt="Test image" style="max-width: 200px;">`, 'success');
+                    
+                } catch (error) {
+                    log(`❌ Upload failed: ${error.message}`, 'error');
+                    
+                    // Test with a different Cloudinary setup
+                    log('🔧 Trying alternative upload method...', 'info');
+                    try {
+                        await testAlternativeUpload(blob);
+                    } catch (altError) {
+                        log(`❌ Alternative method also failed: ${altError.message}`, 'error');
+                    }
+                }
+            }, 'image/png');
+        }
+        
+        async function testAlternativeUpload(blob) {
+            const formData = new FormData();
+            formData.append('file', blob, 'test.png');
+            formData.append('upload_preset', 'ml_default');
+            
+            const response = await fetch('https://api.cloudinary.com/v1_1/demo/image/upload', {
+                method: 'POST',
+                body: formData,
+            });
+            
+            if (!response.ok) {
+                const errorText = await response.text();
+                throw new Error(`HTTP ${response.status}: ${errorText}`);
+            }
+            
+            const data = await response.json();
+            log(`✅ Alternative upload successful!<br>URL: <div class="photo-url">${data.secure_url}</div>`, 'success');
+            log(`<img src="${data.secure_url}" alt="Alternative test" style="max-width: 200px;">`, 'success');
+        }
+        
+        async function testLocalUpload() {
+            log('📱 Testing Local image upload (Base64)...', 'info');
+            
+            // Create a test canvas image
+            const canvas = document.createElement('canvas');
+            canvas.width = 200;
+            canvas.height = 200;
+            const ctx = canvas.getContext('2d');
+            
+            // Draw a simple test image
+            ctx.fillStyle = '#2196F3';
+            ctx.fillRect(0, 0, 200, 200);
+            ctx.fillStyle = '#fff';
+            ctx.font = '18px Arial';
+            ctx.fillText('LOCAL IMAGE', 40, 100);
+            ctx.fillText(new Date().toLocaleTimeString(), 30, 130);
+            
+            // Convert to blob
+            canvas.toBlob(async (blob) => {
+                try {
+                    const file = new File([blob], 'local-test.png', { type: 'image/png' });
+                    log(`📷 Created local test image: ${file.name} (${file.size} bytes)`, 'info');
+                    
+                    const base64Url = await LocalImageAPI.uploadImage(file);
+                    log(`✅ Local upload successful!<br>Base64 URL: ${base64Url.substring(0, 100)}...`, 'success');
+                    log(`<img src="${base64Url}" alt="Local test image" style="max-width: 200px;">`, 'success');
+                    log('🎉 Local images work perfectly! Use lost-form-local.html', 'success');
+                    
+                } catch (error) {
+                    log(`❌ Local upload failed: ${error.message}`, 'error');
+                }
+            }, 'image/png');
+        }
+
+        // Auto-start debugging
+        window.addEventListener('load', () => {
+            setTimeout(debugImages, 1000);
+        });
+    </script>
+</body>
+</html>

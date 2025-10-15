@@ -1,0 +1,66 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Campus Lost & Found</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="home-container page-transition">
+        <div class="text-center mb-12">
+            <h1 class="home-title">Campus Lost & Found</h1>
+            <p class="home-subtitle">Help reunite items with their owners</p>
+        </div>
+
+        <div class="action-grid">
+            <button class="action-card hover-scale active-scale" onclick="Navigation.navigateTo('lost')">
+                <div class="flex flex-col items-center space-y-4">
+                    <div class="icon-container-red">
+                        <svg class="icon-xl text-red-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M16 16s-1.5-2-4-2-4 2-4 2"/>
+                            <line x1="9" y1="9" x2="9.01" y2="9"/>
+                            <line x1="15" y1="9" x2="15.01" y2="9"/>
+                        </svg>
+                    </div>
+                    <h2 class="action-title">I Lost It :(</h2>
+                    <p class="action-description">Report a lost item</p>
+                </div>
+            </button>
+
+            <button class="action-card hover-scale active-scale" onclick="Navigation.navigateTo('found')">
+                <div class="flex flex-col items-center space-y-4">
+                    <div class="icon-container-green">
+                        <svg class="icon-xl text-green-600" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M8 14s1.5 2 4 2 4-2 4-2"/>
+                            <line x1="9" y1="9" x2="9.01" y2="9"/>
+                            <line x1="15" y1="9" x2="15.01" y2="9"/>
+                        </svg>
+                    </div>
+                    <h2 class="action-title">I Found It!</h2>
+                    <p class="action-description">Report a found item</p>
+                </div>
+            </button>
+        </div>
+
+        <button class="nav-link" onclick="Navigation.navigateTo('dashboard')">
+            View All Items
+        </button>
+    </div>
+
+    <!-- Load JavaScript utilities -->
+    <script src="js/navigation.js"></script>
+    <script src="js/supabase.js"></script>
+    <script src="js/cloudinary.js"></script>
+    
+    <script>
+        // Initialize page animations
+        document.addEventListener('DOMContentLoaded', () => {
+            Navigation.initPageAnimations();
+        });
+    </script>
+</body>
+</html>

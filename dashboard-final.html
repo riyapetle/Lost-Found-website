@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Campus Lost & Found</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="min-h-screen bg-gray-50">
+        <div class="dashboard-header">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <button onclick="window.location.href='index.html'" class="back-button mb-4">
+                    ← Back to Home
+                </button>
+                <h1 class="text-3xl font-bold text-gray-800">Lost & Found Dashboard</h1>
+            </div>
+        </div>
+
+        <div class="dashboard-content">
+            <!-- Status Messages -->
+            <div id="statusMessage" style="margin-bottom: 1rem;"></div>
+            
+            <!-- Filter Buttons -->
+            <div class="filter-buttons" style="margin-bottom: 2rem;">
+                <button id="btnAll" onclick="filterItems('All')" class="filter-button filter-button-active">
+                    All (<span id="countAll">0</span>)
+                </button>
+                <button id="btnLost" onclick="filterItems('Lost')" class="filter-button filter-button-inactive">
+                    Lost (<span id="countLost">0</span>)
+                </button>
+                <button id="btnFound" onclick="filterItems('Found')" class="filter-button filter-button-inactive">
+                    Found (<span id="countFound">0</span>)
+                </button>
+                <button onclick="loadData()" style="margin-left: 20px; padding: 8px 16px; background: #10b981; color: white; border: none; border-radius: 4px;">
+                    🔄 Refresh
+                </button>
+            </div>
+
+            <!-- Items Container -->
+            <div id="itemsContainer" style="min-height: 200px;">
+                <div style="text-align: center; padding: 2rem; color: #6b7280;">
+                    🔄 Loading items...
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Simple global variables
+        let allItems = [];
+        let currentFilter = 'All';
+        
+        // Supabase configuration (direct, no external file dependencies)
+        const SUPABASE_URL = 'https://ppipsveojmbfpsjjcmlt.supabase.co';
+        const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwaXBzdmVvam1iZnBzampjbWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyNTYxNDcsImV4cCI6MjA3NTgzMjE0N30.Dla5hGLU-5FPlbjDp6Bd0zS4yjZjCPlF4qEiVMKj9i4';
+        const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+        
+        function showMessage(text, isError = false) {
+            const div = document.getElementById('statusMessage');
+            div.innerHTML = `
+                <div style="padding: 12px; border-radius: 6px; ${isError ? 'background: #fee2e2; color: #dc2626; border: 1px solid #fca5a5;' : 'background: #d1fae5; color: #065f46; border: 1px solid #a7f3d0;'}">
+                    ${text}
+                </div>
+            `;
+            setTimeout(() => div.innerHTML = '', 5000);
+        }
+        
+        async function loadData() {
+            console.log('📥 Loading data from Supabase...');
+            
+            try {
+                const { data, error } = await supabaseClient
+                    .from('items')
+                    .select('*')
+                    .order('created_at', { ascending: false });
+                
+                if (error) {
+                    console.error('❌ Supabase error:', error);
+                    throw new Error(error.message);
+                }
+                
+                allItems = data || [];
+                console.log(`✅ Loaded ${allItems.length} items:`, allItems);
+                
+                updateCounts();
+                displayItems();
+                showMessage(`✅ Loaded ${allItems.length} items successfully`);
+                
+            } catch (error) {
+                console.error('💥 Load failed:', error);
+                showMessage(`❌ Failed to load: ${error.message}`, true);
+                document.getElementById('itemsContainer').innerHTML = `
+                    <div style="text-align: center; padding: 2rem; color: #dc2626;">
+                        ❌ Failed to load items: ${error.message}
+                        <br><br>
+                        <button onclick="loadData()" style="padding: 8px 16px; background: #dc2626; color: white; border: none; border-radius: 4px;">
+                            Try Again
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        function updateCounts() {
+            const total = allItems.length;
+            const lost = allItems.filter(item => item.status === 'Lost').length;
+            const found = allItems.filter(item => item.status === 'Found').length;
+            
+            document.getElementById('countAll').textContent = total;
+            document.getElementById('countLost').textContent = lost;
+            document.getElementById('countFound').textContent = found;
+            
+            console.log(`📊 Counts: Total=${total}, Lost=${lost}, Found=${found}`);
+        }
+        
+        function filterItems(filter) {
+            currentFilter = filter;
+            console.log('🔍 Filter changed to:', filter);
+            
+            // Update button styles
+            ['All', 'Lost', 'Found'].forEach(f => {
+                const btn = document.getElementById(`btn${f}`);
+                btn.className = f === filter ? 
+                    (f === 'All' ? 'filter-button filter-button-active' : 
+                     f === 'Lost' ? 'filter-button filter-button-red-active' : 'filter-button filter-button-green-active') :
+                    'filter-button filter-button-inactive';
+            });
+            
+            displayItems();
+        }
+        
+        function displayItems() {
+            let itemsToShow = allItems;
+            if (currentFilter !== 'All') {
+                itemsToShow = allItems.filter(item => item.status === currentFilter);
+            }
+            
+            console.log(`👁️ Displaying ${itemsToShow.length} items (filter: ${currentFilter})`);
+            
+            const container = document.getElementById('itemsContainer');
+            
+            if (itemsToShow.length === 0) {
+                container.innerHTML = `
+                    <div style="text-align: center; padding: 3rem; color: #6b7280;">
+                        📦 No ${currentFilter === 'All' ? '' : currentFilter.toLowerCase()} items found
+                        <br><br>
+                        <button onclick="loadData()" style="padding: 8px 16px; background: #3b82f6; color: white; border: none; border-radius: 4px;">
+                            🔄 Refresh Data
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            let html = '<div class="items-grid">';
+            itemsToShow.forEach(item => {
+                html += createItemHTML(item);
+            });
+            html += '</div>';
+            
+            container.innerHTML = html;
+        }
+        
+        function createItemHTML(item) {
+            console.log(`🎨 Creating card for: ${item.name} (Photo: ${!!item.photo_url})`);
+            
+            const statusColor = item.status === 'Lost' ? 'status-badge-lost' : 'status-badge-found';
+            const date = new Date(item.date).toLocaleDateString();
+            
+            // Simple image handling
+            let imageHTML;
+            if (item.photo_url && item.photo_url.trim() && 
+                (item.photo_url.startsWith('http') || item.photo_url.startsWith('data:image'))) {
+                console.log(`✅ Valid image for ${item.name}`);
+                imageHTML = `
+                    <img src="${item.photo_url}" 
+                         alt="${item.name}" 
+                         style="width: 100%; height: 100%; object-fit: cover;"
+                         onload="console.log('🖼️ Image loaded: ${item.name}')"
+                         onerror="console.log('💥 Image failed: ${item.name}'); this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div style="display: none; width: 100%; height: 100%; align-items: center; justify-content: center; background: #f3f4f6;">
+                        <div style="text-align: center; color: #9ca3af;">
+                            <div style="font-size: 3rem; margin-bottom: 8px;">📦</div>
+                            <div>Image failed to load</div>
+                        </div>
+                    </div>
+                `;
+            } else {
+                console.log(`⚠️ No image for ${item.name}`);
+                imageHTML = `
+                    <div style="width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background: #f3f4f6;">
+                        <div style="text-align: center; color: #9ca3af;">
+                            <div style="font-size: 3rem; margin-bottom: 8px;">📦</div>
+                            <div>No photo</div>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            return `
+                <div class="item-card" id="item-${item.id}">
+                    <div class="item-image" style="height: 12rem; overflow: hidden; background: #f3f4f6;">
+                        ${imageHTML}
+                    </div>
+                    <div class="item-content" style="padding: 1.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 0.75rem;">
+                            <h3 class="item-title" style="font-size: 1.25rem; font-weight: 700; color: #1f2937;">${escapeHTML(item.name)}</h3>
+                            <span class="status-badge ${statusColor}" style="padding: 0.25rem 0.75rem; border-radius: 9999px; font-size: 0.75rem; font-weight: 600;">
+                                ${item.status}
+                            </span>
+                        </div>
+                        <p style="color: #4b5563; font-size: 0.875rem; margin-bottom: 1rem; line-height: 1.5;">
+                            ${escapeHTML(item.description.length > 100 ? item.description.substring(0, 100) + '...' : item.description)}
+                        </p>
+                        <div style="font-size: 0.875rem; color: #6b7280; margin-bottom: 1rem;">
+                            <div style="margin-bottom: 0.5rem;">📍 ${escapeHTML(item.location)}</div>
+                            <div>📅 ${date}</div>
+                        </div>
+                        <div style="display: flex; gap: 0.5rem; flex-wrap: wrap;">
+                            <button onclick="deleteItemForever('${item.id}', '${escapeHTML(item.name).replace(/'/g, '\\\'')}')" 
+                                    style="flex: 1; min-width: 120px; padding: 0.5rem 1rem; background: #ef4444; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">
+                                🗑️ Delete
+                            </button>
+                            <button onclick="markDelivered('${item.id}', '${escapeHTML(item.name).replace(/'/g, '\\\'')}')" 
+                                    style="flex: 1; min-width: 120px; padding: 0.5rem 1rem; background: #10b981; color: white; border: none; border-radius: 0.375rem; cursor: pointer; font-size: 0.875rem;">
+                                ✅ ${item.status === 'Lost' ? 'Found' : 'Returned'}
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function escapeHTML(str) {
+            return (str || '').toString()
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#x27;');
+        }
+        
+        async function deleteItemForever(itemId, itemName) {
+            if (!confirm(`🗑️ PERMANENTLY DELETE "${itemName}"?\n\nThis cannot be undone!`)) {
+                return;
+            }
+            
+            console.log(`🗑️ Deleting item ${itemId}: ${itemName}`);
+            
+            // Show loading
+            const itemElement = document.getElementById(`item-${itemId}`);
+            if (itemElement) {
+                itemElement.style.opacity = '0.5';
+                itemElement.style.pointerEvents = 'none';
+            }
+            
+            try {
+                const { error } = await supabaseClient
+                    .from('items')
+                    .delete()
+                    .eq('id', itemId);
+                
+                if (error) {
+                    console.error('❌ Delete error:', error);
+                    throw new Error(error.message);
+                }
+                
+                console.log('✅ Item deleted successfully');
+                
+                // Remove from local data
+                allItems = allItems.filter(item => item.id !== itemId);
+                updateCounts();
+                displayItems();
+                showMessage(`✅ "${itemName}" deleted permanently!`);
+                
+            } catch (error) {
+                console.error('💥 Delete failed:', error);
+                showMessage(`❌ Delete failed: ${error.message}`, true);
+                
+                // Restore item
+                if (itemElement) {
+                    itemElement.style.opacity = '1';
+                    itemElement.style.pointerEvents = 'auto';
+                }
+            }
+        }
+        
+        async function markDelivered(itemId, itemName) {
+            const item = allItems.find(i => i.id === itemId);
+            const action = item?.status === 'Lost' ? 'found and returned' : 'returned to owner';
+            
+            if (!confirm(`✅ Mark "${itemName}" as ${action}?\n\nThis will remove it from the system.`)) {
+                return;
+            }
+            
+            // Same as delete - delivered items are removed
+            await deleteItemForever(itemId, itemName);
+        }
+        
+        // Initialize
+        document.addEventListener('DOMContentLoaded', function() {
+            console.log('🚀 Dashboard loading...');
+            loadData();
+        });
+        
+        // Auto-refresh when window gets focus
+        window.addEventListener('focus', function() {
+            console.log('👁️ Window focused, refreshing...');
+            loadData();
+        });
+    </script>
+</body>
+</html>

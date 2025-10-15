@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Debug Test - Campus Lost & Found</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 0 auto;
+            padding: 20px;
+        }
+        .result {
+            background: #f0f0f0;
+            padding: 15px;
+            margin: 10px 0;
+            border-radius: 5px;
+        }
+        .error {
+            background: #ffebee;
+            color: #c62828;
+        }
+        .success {
+            background: #e8f5e8;
+            color: #2e7d32;
+        }
+        button {
+            background: #2563eb;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            margin: 5px;
+        }
+    </style>
+</head>
+<body>
+    <h1>Campus Lost & Found - Debug Test</h1>
+    <p>This page helps debug database connection issues.</p>
+    
+    <button onclick="testConnection()">Test Database Connection</button>
+    <button onclick="testGetItems()">Test Get Items</button>
+    <button onclick="clearResults()">Clear Results</button>
+    
+    <div id="results"></div>
+
+    <script src="js/supabase.js"></script>
+    
+    <script>
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testConnection() {
+            log('Testing Supabase connection...');
+            
+            try {
+                // Test basic connection
+                const { data, error } = await supabaseClient.from('items').select('count', { count: 'exact' });
+                
+                if (error) {
+                    log(`❌ Connection error: ${error.message}`, 'error');
+                } else {
+                    log(`✅ Connected successfully! Found ${data?.length || 0} items in database`, 'success');
+                }
+            } catch (err) {
+                log(`❌ Unexpected error: ${err.message}`, 'error');
+            }
+        }
+
+        async function testGetItems() {
+            log('Testing SupabaseAPI.getItems()...');
+            
+            try {
+                const items = await SupabaseAPI.getItems();
+                log(`✅ Retrieved ${items.length} items`, 'success');
+                
+                if (items.length > 0) {
+                    const lostCount = items.filter(i => i.status === 'Lost').length;
+                    const foundCount = items.filter(i => i.status === 'Found').length;
+                    log(`📊 Breakdown: ${lostCount} Lost, ${foundCount} Found`, 'success');
+                    
+                    // Show first few items
+                    items.slice(0, 3).forEach((item, index) => {
+                        log(`📝 Item ${index + 1}: "${item.name}" (${item.status}) - ${item.location}`, 'info');
+                    });
+                }
+            } catch (err) {
+                log(`❌ Error getting items: ${err.message}`, 'error');
+            }
+        }
+
+        // Auto-test on load
+        window.addEventListener('load', () => {
+            log('🚀 Debug test page loaded');
+            setTimeout(testConnection, 500);
+        });
+    </script>
+</body>
+</html>

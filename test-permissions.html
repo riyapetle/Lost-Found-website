@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Test Supabase Permissions</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div id="output" style="padding: 20px; font-family: Arial, sans-serif;"></div>
+    <button onclick="runTests()" style="padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">Run Permission Tests</button>
+
+    <script>
+        const output = document.getElementById('output');
+        
+        function log(message, type = 'info') {
+            const color = type === 'error' ? 'red' : type === 'success' ? 'green' : type === 'warning' ? 'orange' : 'blue';
+            output.innerHTML += `<div style="color: ${color}; margin: 5px 0; font-size: 14px;">[${new Date().toLocaleTimeString()}] ${message}</div>`;
+        }
+
+        async function runTests() {
+            output.innerHTML = '';
+            
+            try {
+                log('🔍 Testing Supabase Database Permissions...', 'info');
+                
+                const SUPABASE_URL = 'https://ppipsveojmbfpsjjcmlt.supabase.co';
+                const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwaXBzdmVvam1iZnBzampjbWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyNTYxNDcsImV4cCI6MjA3NTgzMjE0N30.Dla5hGLU-5FPlbjDp6Bd0zS4yjZjCPlF4qEiVMKj9i4';
+                
+                const supabaseClient = supabase.createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
+                
+                // Test 1: SELECT permission
+                log('📖 Testing SELECT permission...', 'info');
+                const { data: selectData, error: selectError } = await supabaseClient
+                    .from('items')
+                    .select('*')
+                    .limit(5);
+                
+                if (selectError) {
+                    log(`❌ SELECT failed: ${selectError.message}`, 'error');
+                } else {
+                    log(`✅ SELECT works: Found ${selectData.length} items`, 'success');
+                }
+                
+                // Test 2: INSERT permission
+                log('📝 Testing INSERT permission...', 'info');
+                const testItem = {
+                    name: 'Permission Test Item',
+                    description: 'This is a test item to check INSERT permissions',
+                    location: 'Test Location',
+                    date: '2025-01-01',
+                    status: 'Lost',
+                    photo_url: null
+                };
+                
+                const { data: insertData, error: insertError } = await supabaseClient
+                    .from('items')
+                    .insert([testItem])
+                    .select()
+                    .single();
+                
+                if (insertError) {
+                    log(`❌ INSERT failed: ${insertError.message}`, 'error');
+                } else {
+                    log(`✅ INSERT works: Created item with ID ${insertData.id}`, 'success');
+                    
+                    // Test 3: UPDATE permission
+                    log('✏️ Testing UPDATE permission...', 'info');
+                    const { data: updateData, error: updateError } = await supabaseClient
+                        .from('items')
+                        .update({ description: 'Updated test description' })
+                        .eq('id', insertData.id)
+                        .select();
+                    
+                    if (updateError) {
+                        log(`❌ UPDATE failed: ${updateError.message}`, 'error');
+                    } else {
+                        log(`✅ UPDATE works: Modified ${updateData.length} row(s)`, 'success');
+                    }
+                    
+                    // Test 4: DELETE permission  
+                    log('🗑️ Testing DELETE permission...', 'info');
+                    const { data: deleteData, error: deleteError } = await supabaseClient
+                        .from('items')
+                        .delete()
+                        .eq('id', insertData.id)
+                        .select();
+                    
+                    if (deleteError) {
+                        log(`❌ DELETE failed: ${deleteError.message}`, 'error');
+                        log(`💡 This is the problem! DELETE permission is missing.`, 'warning');
+                        log(`🔧 You need to add a DELETE policy in Supabase dashboard.`, 'warning');
+                    } else if (!deleteData || deleteData.length === 0) {
+                        log(`❌ DELETE failed: No rows deleted (RLS policy issue)`, 'error');
+                        log(`💡 Row Level Security is blocking DELETE operations.`, 'warning');
+                        log(`🔧 You need to add a DELETE policy that allows anonymous users.`, 'warning');
+                    } else {
+                        log(`✅ DELETE works: Deleted ${deleteData.length} row(s)`, 'success');
+                        log(`🎉 All permissions working correctly!`, 'success');
+                    }
+                }
+                
+                log('', 'info');
+                log('📋 SUMMARY:', 'info');
+                log('If DELETE failed, you need to fix Supabase Row Level Security policies.', 'warning');
+                log('Go to your Supabase dashboard → Authentication → Policies → Add policy for DELETE', 'warning');
+                
+            } catch (error) {
+                log(`💥 Test failed: ${error.message}`, 'error');
+            }
+        }
+
+        // Auto-run tests when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            setTimeout(runTests, 1000);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,485 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Campus Lost & Found</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="min-h-screen bg-gray-50 dashboard-transition">
+        <div class="dashboard-header">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <button class="back-button mb-4" onclick="Navigation.navigateTo('home')">
+                    <svg class="icon mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M19 12H5"/>
+                        <polyline points="12,19 5,12 12,5"/>
+                    </svg>
+                    Back to Home
+                </button>
+                <h1 class="text-3xl font-bold text-gray-800">Lost & Found Dashboard</h1>
+            </div>
+        </div>
+
+        <div class="dashboard-content">
+            <div class="filter-buttons" id="filterButtons">
+                <button
+                    id="filter-all"
+                    class="filter-button filter-button-active"
+                    onclick="dashboard.setFilter('All')"
+                >
+                    All Items (<span id="count-all">0</span>)
+                </button>
+                <button
+                    id="filter-lost"
+                    class="filter-button filter-button-inactive"
+                    onclick="dashboard.setFilter('Lost')"
+                >
+                    Lost (<span id="count-lost">0</span>)
+                </button>
+                <button
+                    id="filter-found"
+                    class="filter-button filter-button-inactive"
+                    onclick="dashboard.setFilter('Found')"
+                >
+                    Found (<span id="count-found">0</span>)
+                </button>
+            </div>
+
+            <div id="itemsContainer">
+                <!-- Items will be loaded here -->
+            </div>
+        </div>
+    </div>
+
+    <!-- Load JavaScript utilities -->
+    <script src="js/navigation.js"></script>
+    <script src="js/supabase.js"></script>
+    <script src="js/cloudinary.js"></script>
+
+    <script>
+        class Dashboard {
+            constructor() {
+                this.items = [];
+                this.filteredItems = [];
+                this.currentFilter = 'All';
+                this.itemsContainer = document.getElementById('itemsContainer');
+                
+                this.initializeEventListeners();
+                this.loadItems();
+            }
+
+            initializeEventListeners() {
+                // Event listeners are handled by onclick attributes in HTML
+                // This method can be extended for additional event handling
+            }
+
+            async loadItems() {
+                try {
+                    console.log('Loading items from database...');
+                    this.showLoading();
+                    
+                    // Test database connection first
+                    const data = await SupabaseAPI.getItems();
+                    console.log('Retrieved items:', data);
+                    console.log('Total items found:', data.length);
+                    
+                    // Validate data
+                    if (!Array.isArray(data)) {
+                        throw new Error('Invalid data format received from database');
+                    }
+                    
+                    this.items = data;
+                    
+                    // Log detailed item breakdown
+                    const lostCount = data.filter(item => item.status === 'Lost').length;
+                    const foundCount = data.filter(item => item.status === 'Found').length;
+                    const withPhotos = data.filter(item => this.hasValidImageUrl(item.photo_url)).length;
+                    
+                    console.log(`Items breakdown: ${lostCount} Lost, ${foundCount} Found, ${withPhotos} with photos`);
+                    
+                    // Log items with problematic photos for debugging
+                    const problematicPhotos = data.filter(item => item.photo_url && !this.hasValidImageUrl(item.photo_url));
+                    if (problematicPhotos.length > 0) {
+                        console.warn('Items with problematic photo URLs:', problematicPhotos.map(item => ({
+                            name: item.name,
+                            photo_url: item.photo_url
+                        })));
+                    }
+                    
+                    this.updateCounts();
+                    this.filterItems();
+                    
+                } catch (error) {
+                    console.error('Error loading items:', error);
+                    
+                    // Show detailed error message
+                    let errorMessage = 'Failed to load items from database.';
+                    if (error.message.includes('fetch')) {
+                        errorMessage += ' Please check your internet connection.';
+                    } else if (error.message.includes('auth') || error.message.includes('unauthorized')) {
+                        errorMessage += ' Database authentication failed.';
+                    } else {
+                        errorMessage += ` Error: ${error.message}`;
+                    }
+                    
+                    this.showError(errorMessage + ' Check the browser console for more details.');
+                }
+            }
+
+            showLoading() {
+                this.itemsContainer.innerHTML = `
+                    <div class="loading-spinner" style="display: flex; justify-content: center; align-items: center; min-height: 200px;">
+                        <div style="text-align: center;">
+                            <div style="width: 50px; height: 50px; border: 4px solid #f3f3f3; border-top: 4px solid #3498db; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 10px;"></div>
+                            <p style="color: #666;">Loading items from database...</p>
+                        </div>
+                    </div>
+                    <style>
+                        @keyframes spin {
+                            0% { transform: rotate(0deg); }
+                            100% { transform: rotate(360deg); }
+                        }
+                    </style>
+                `;
+            }
+
+            showError(message) {
+                this.itemsContainer.innerHTML = `
+                    <div style="background: #fee2e2; border: 1px solid #fecaca; color: #dc2626; padding: 20px; border-radius: 8px; margin: 20px; text-align: center;">
+                        <h3 style="margin: 0 0 10px 0; font-size: 18px;">⚠️ Error Loading Dashboard</h3>
+                        <p style="margin: 10px 0; font-size: 14px;">${message}</p>
+                        <button onclick="window.location.reload()" style="margin-top: 15px; padding: 10px 20px; background: #dc2626; color: white; border: none; border-radius: 5px; cursor: pointer; font-size: 14px;">Reload Page</button>
+                    </div>
+                `;
+            }
+
+            updateCounts() {
+                const totalCount = this.items.length;
+                const lostCount = this.items.filter(item => item.status === 'Lost').length;
+                const foundCount = this.items.filter(item => item.status === 'Found').length;
+
+                document.getElementById('count-all').textContent = totalCount;
+                document.getElementById('count-lost').textContent = lostCount;
+                document.getElementById('count-found').textContent = foundCount;
+            }
+
+            setFilter(filter) {
+                this.currentFilter = filter;
+                this.updateFilterButtons();
+                this.filterItems();
+            }
+
+            updateFilterButtons() {
+                // Reset all buttons
+                document.querySelectorAll('.filter-button').forEach(btn => {
+                    btn.className = 'filter-button filter-button-inactive';
+                });
+
+                // Set active button
+                const activeButton = document.getElementById(`filter-${this.currentFilter.toLowerCase()}`);
+                if (activeButton) {
+                    if (this.currentFilter === 'All') {
+                        activeButton.className = 'filter-button filter-button-active';
+                    } else if (this.currentFilter === 'Lost') {
+                        activeButton.className = 'filter-button filter-button-red-active';
+                    } else if (this.currentFilter === 'Found') {
+                        activeButton.className = 'filter-button filter-button-green-active';
+                    }
+                }
+            }
+
+            filterItems() {
+                console.log(`Filtering items with filter: ${this.currentFilter}`);
+                console.log('All items:', this.items);
+                
+                if (this.currentFilter === 'All') {
+                    this.filteredItems = [...this.items];
+                } else {
+                    this.filteredItems = this.items.filter(item => item.status === this.currentFilter);
+                }
+                
+                console.log(`Filtered items (${this.currentFilter}):`, this.filteredItems);
+                this.renderItems();
+            }
+
+            renderItems() {
+                if (this.filteredItems.length === 0) {
+                    this.itemsContainer.innerHTML = `
+                        <div class="no-items">
+                            <p class="text-gray-500 text-lg">No items found</p>
+                        </div>
+                    `;
+                    return;
+                }
+
+                const itemsHtml = this.filteredItems.map(item => this.createItemCard(item)).join('');
+                this.itemsContainer.innerHTML = `
+                    <div class="items-grid">
+                        ${itemsHtml}
+                    </div>
+                `;
+            }
+
+            createItemCard(item) {
+                const statusClass = item.status === 'Lost' ? 'status-badge-lost' : 'status-badge-found';
+                
+                // Improved image handling with multiple fallbacks
+                let photoSection;
+                if (this.hasValidImageUrl(item.photo_url)) {
+                    photoSection = `<img src="${item.photo_url}" alt="${this.escapeHtml(item.name)}" class="w-full h-full object-cover" onload="this.style.opacity=1" onerror="this.parentElement.innerHTML='<div class=\'no-photo\'><div class=\'text-center\'><div class=\'text-4xl mb-2\'>📦</div><p class=\'text-sm\'>Photo not available</p></div></div>'"/>`;
+                } else {
+                    photoSection = `<div class="no-photo">
+                        <div class="text-center">
+                            <div class="text-4xl mb-2">📦</div>
+                            <p class="text-sm">No photo available</p>
+                        </div>
+                    </div>`;
+                }
+
+                const description = UIUtils.truncateText(item.description, 100);
+                const formattedDate = SupabaseAPI.formatDate(item.date);
+
+                return `
+                    <div class="item-card slide-up">
+                        <div class="item-image">
+                            ${photoSection}
+                        </div>
+                        <div class="item-content">
+                            <div class="item-header">
+                                <h3 class="item-title">${this.escapeHtml(item.name)}</h3>
+                                <span class="status-badge ${statusClass}">
+                                    ${item.status}
+                                </span>
+                            </div>
+                            <p class="item-description">
+                                ${this.escapeHtml(description)}
+                            </p>
+                            <div class="item-details space-y-2">
+                                <div class="detail-row">
+                                    <svg class="detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 10c0 7-9 13-9 13s-9-6-9-13a9 9 0 0118 0z"/>
+                                        <circle cx="12" cy="10" r="3"/>
+                                    </svg>
+                                    <span>${this.escapeHtml(item.location)}</span>
+                                </div>
+                                <div class="detail-row">
+                                    <svg class="detail-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+                                        <line x1="16" y1="2" x2="16" y2="6"/>
+                                        <line x1="8" y1="2" x2="8" y2="6"/>
+                                        <line x1="3" y1="10" x2="21" y2="10"/>
+                                    </svg>
+                                    <span>${formattedDate}</span>
+                                </div>
+                            </div>
+                            <div class="item-actions">
+                                <button class="action-btn edit-btn" onclick="dashboard.editItem('${item.id}')">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M11 4H4a2 2 0 00-2 2v14a2 2 0 002 2h14a2 2 0 002-2v-7"/>
+                                        <path d="M18.5 2.5a2.121 2.121 0 013 3L12 15l-4 1 1-4 9.5-9.5z"/>
+                                    </svg>
+                                    Edit
+                                </button>
+                                ${item.status === 'Lost' ? 
+                                    `<button class="action-btn delivered-btn" onclick="dashboard.markAsDelivered('${item.id}')">
+                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="9,11 12,14 22,4"/>
+                                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                                        </svg>
+                                        Found
+                                    </button>` :
+                                    `<button class="action-btn delivered-btn" onclick="dashboard.markAsDelivered('${item.id}')">
+                                        <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                            <polyline points="9,11 12,14 22,4"/>
+                                            <path d="M21 12v7a2 2 0 01-2 2H5a2 2 0 01-2-2V5a2 2 0 012-2h11"/>
+                                        </svg>
+                                        Returned
+                                    </button>`
+                                }
+                                <button class="action-btn remove-btn" onclick="dashboard.removeItem('${item.id}')">
+                                    <svg class="icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <polyline points="3,6 5,6 21,6"/>
+                                        <path d="M19 6v14a2 2 0 01-2 2H7a2 2 0 01-2-2V6m3 0V4a2 2 0 012-2h4a2 2 0 012 2v2"/>
+                                    </svg>
+                                    Remove
+                                </button>
+                            </div>
+                        </div>
+                    </div>
+                `;
+            }
+
+            escapeHtml(text) {
+                const div = document.createElement('div');
+                div.textContent = text;
+                return div.innerHTML;
+            }
+
+            // Check if image URL is valid and accessible
+            hasValidImageUrl(url) {
+                if (!url || url === 'null' || url === 'undefined' || url.trim() === '') {
+                    return false;
+                }
+                
+                // Check for data URLs (base64 images)
+                if (url.startsWith('data:image/')) {
+                    return true;
+                }
+                
+                // Check for HTTP/HTTPS URLs
+                if (url.startsWith('http://') || url.startsWith('https://')) {
+                    return true;
+                }
+                
+                return false;
+            }
+
+            // Edit item
+            editItem(itemId) {
+                const item = this.items.find(i => i.id === itemId);
+                if (item) {
+                    Modal.showEditModal(item);
+                }
+            }
+
+            // Mark item as delivered/returned
+            async markAsDelivered(itemId) {
+                const item = this.items.find(i => i.id === itemId);
+                if (!item) {
+                    console.error('Item not found:', itemId);
+                    alert('Item not found. Please refresh the page and try again.');
+                    return;
+                }
+
+                const actionText = item.status === 'Lost' ? 'found and returned to owner' : 'returned to its owner';
+                
+                Modal.showConfirmDialog(
+                    'Mark as Delivered',
+                    `Are you sure this item has been ${actionText}? This will permanently remove it from the system.`,
+                    async () => {
+                        try {
+                            console.log(`Attempting to delete item ${itemId} from database...`);
+                            
+                            // Delete from database
+                            const deleteResult = await SupabaseAPI.deleteItem(itemId);
+                            console.log('Delete result:', deleteResult);
+                            
+                            // The deleteItem function now handles verification internally
+                            console.log('✅ Item deletion completed and verified by SupabaseAPI')
+                            
+                            // Remove from local array
+                            this.items = this.items.filter(i => i.id !== itemId);
+                            this.updateCounts();
+                            this.filterItems();
+                            
+                            // Show success message
+                            const container = document.querySelector('.dashboard-content');
+                            UIUtils.showSuccess(container, `Item "${item.name}" marked as delivered and removed successfully!`);
+                            
+                        } catch (error) {
+                            console.error('Error marking as delivered:', error);
+                            
+                            // Reload items to ensure UI is in sync with database
+                            console.log('Reloading items to verify current state...');
+                            await this.loadItems();
+                            
+                            alert('Failed to mark item as delivered: ' + error.message + '. The page has been refreshed to show the current state.');
+                        }
+                    }
+                );
+            }
+
+            // Remove item
+            async removeItem(itemId) {
+                const item = this.items.find(i => i.id === itemId);
+                if (!item) {
+                    console.error('Item not found:', itemId);
+                    alert('Item not found. Please refresh the page and try again.');
+                    return;
+                }
+
+                Modal.showConfirmDialog(
+                    'Remove Item',
+                    `Are you sure you want to permanently remove "${item.name}" from the system? This action cannot be undone.`,
+                    async () => {
+                        try {
+                            console.log(`Attempting to permanently remove item ${itemId} from database...`);
+                            
+                            // Delete from database with verification
+                            const deleteResult = await SupabaseAPI.deleteItem(itemId);
+                            console.log('Delete result:', deleteResult);
+                            
+                            // The deleteItem function now handles verification internally
+                            console.log('✅ Item deletion completed and verified by SupabaseAPI')
+                            
+                            // Remove from local array
+                            this.items = this.items.filter(i => i.id !== itemId);
+                            this.updateCounts();
+                            this.filterItems();
+                            
+                            // Show success message
+                            const container = document.querySelector('.dashboard-content');
+                            UIUtils.showSuccess(container, `Item "${item.name}" permanently removed from the system!`);
+                            
+                        } catch (error) {
+                            console.error('Error removing item:', error);
+                            
+                            // Reload items to ensure UI is in sync with database
+                            console.log('Reloading items to verify current state...');
+                            await this.loadItems();
+                            
+                            alert('Failed to remove item: ' + error.message + '. The page has been refreshed to show the current state.');
+                        }
+                    }
+                );
+            }
+        }
+
+        // Initialize dashboard when page loads
+        let dashboard;
+        document.addEventListener('DOMContentLoaded', () => {
+            try {
+                console.log('Initializing dashboard...');
+                
+                // Check if required dependencies are loaded
+                if (typeof supabase === 'undefined') {
+                    throw new Error('Supabase client not loaded');
+                }
+                
+                if (typeof SupabaseAPI === 'undefined') {
+                    throw new Error('SupabaseAPI not loaded');
+                }
+                
+                if (typeof Navigation === 'undefined') {
+                    throw new Error('Navigation utilities not loaded');
+                }
+                
+                // Initialize page animations
+                Navigation.initPageAnimations();
+                
+                // Initialize dashboard
+                dashboard = new Dashboard();
+                console.log('Dashboard initialized successfully');
+                
+            } catch (error) {
+                console.error('Failed to initialize dashboard:', error);
+                document.getElementById('itemsContainer').innerHTML = `
+                    <div class="error-message">
+                        <h3>Failed to Load Dashboard</h3>
+                        <p>Error: ${error.message}</p>
+                        <p>Please check:</p>
+                        <ul>
+                            <li>Internet connection</li>
+                            <li>JavaScript files are loaded correctly</li>
+                            <li>Database credentials are valid</li>
+                        </ul>
+                        <button onclick="window.location.reload()" style="margin-top: 10px; padding: 10px 20px; background: #3b82f6; color: white; border: none; border-radius: 5px; cursor: pointer;">Retry</button>
+                    </div>
+                `;
+            }
+        });
+    </script>
+</body>
+</html>

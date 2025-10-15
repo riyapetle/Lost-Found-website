@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Database Test - Campus Lost & Found</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+    <style>
+        body { font-family: Arial, sans-serif; max-width: 800px; margin: 0 auto; padding: 20px; }
+        .test-result { background: #f0f0f0; padding: 15px; margin: 10px 0; border-radius: 5px; }
+        .success { background: #d4edda; color: #155724; }
+        .error { background: #f8d7da; color: #721c24; }
+        .info { background: #cce7ff; color: #004085; }
+        button { padding: 10px 15px; margin: 5px; background: #007bff; color: white; border: none; border-radius: 4px; cursor: pointer; }
+        button:hover { background: #0056b3; }
+        .danger { background: #dc3545 !important; }
+        .danger:hover { background: #c82333 !important; }
+    </style>
+</head>
+<body>
+    <h1>Database Operations Test</h1>
+    <p>This tool tests if all database operations are working correctly.</p>
+    
+    <div style="border: 1px solid #ddd; padding: 15px; margin: 15px 0; border-radius: 5px;">
+        <h3>Test Operations:</h3>
+        <button onclick="testGetItems()">1. Test Get Items</button>
+        <button onclick="testCreateItem()">2. Test Create Item</button>
+        <button onclick="testDeleteItem()" class="danger">3. Test Delete Item</button>
+        <button onclick="clearResults()">Clear Results</button>
+    </div>
+    
+    <div id="results"></div>
+
+    <script src="js/supabase.js"></script>
+    
+    <script>
+        let testItemId = null;
+        
+        function log(message, type = 'info') {
+            const results = document.getElementById('results');
+            const div = document.createElement('div');
+            div.className = `test-result ${type}`;
+            div.innerHTML = `<strong>${new Date().toLocaleTimeString()}:</strong> ${message}`;
+            results.appendChild(div);
+            console.log(message);
+        }
+
+        function clearResults() {
+            document.getElementById('results').innerHTML = '';
+        }
+
+        async function testGetItems() {
+            log('🔄 Testing getItems()...', 'info');
+            
+            try {
+                const items = await SupabaseAPI.getItems();
+                log(`✅ SUCCESS: Retrieved ${items.length} items`, 'success');
+                
+                if (items.length > 0) {
+                    const lostCount = items.filter(i => i.status === 'Lost').length;
+                    const foundCount = items.filter(i => i.status === 'Found').length;
+                    log(`📊 Breakdown: ${lostCount} Lost, ${foundCount} Found`, 'success');
+                    
+                    // Show first item details
+                    const firstItem = items[0];
+                    log(`📝 Sample item: "${firstItem.name}" (${firstItem.status}) at ${firstItem.location}`, 'info');
+                    
+                    if (firstItem.photo_url) {
+                        log(`📷 Has photo: ${firstItem.photo_url.substring(0, 50)}...`, 'info');
+                    }
+                }
+                
+            } catch (error) {
+                log(`❌ FAILED: ${error.message}`, 'error');
+            }
+        }
+
+        async function testCreateItem() {
+            log('🔄 Testing createItem()...', 'info');
+            
+            try {
+                const testItem = {
+                    name: 'TEST ITEM - ' + new Date().toLocaleTimeString(),
+                    description: 'This is a test item created to verify database functionality',
+                    location: 'Test Location',
+                    date: new Date().toISOString().split('T')[0],
+                    status: 'Lost',
+                    photo_url: 'data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAADUlEQVR42mNkYPhfDwAChwGA60e6kgAAAABJRU5ErkJggg==' // 1px test image
+                };
+                
+                const createdItem = await SupabaseAPI.createItem(testItem);
+                testItemId = createdItem.id;
+                
+                log(`✅ SUCCESS: Created test item with ID: ${testItemId}`, 'success');
+                log(`📝 Item name: "${createdItem.name}"`, 'success');
+                log(`🆔 Item ID: ${createdItem.id}`, 'info');
+                
+            } catch (error) {
+                log(`❌ FAILED: ${error.message}`, 'error');
+                console.error('Create error details:', error);
+            }
+        }
+
+        async function testDeleteItem() {
+            if (!testItemId) {
+                log('⚠️ No test item to delete. Please create a test item first.', 'error');
+                return;
+            }
+            
+            log(`🔄 Testing deleteItem() on ID: ${testItemId}...`, 'info');
+            
+            try {
+                const result = await SupabaseAPI.deleteItem(testItemId);
+                log(`✅ SUCCESS: Deleted test item. Result: ${result}`, 'success');
+                
+                // Verify it's gone by trying to get it
+                try {
+                    await SupabaseAPI.getItemById(testItemId);
+                    log(`⚠️ WARNING: Item still exists after delete!`, 'error');
+                } catch (getError) {
+                    log(`✅ CONFIRMED: Item properly deleted (not found)`, 'success');
+                }
+                
+                testItemId = null;
+                
+            } catch (error) {
+                log(`❌ DELETE FAILED: ${error.message}`, 'error');
+                console.error('Delete error details:', error);
+            }
+        }
+        
+        // Auto-run basic test on load
+        window.addEventListener('load', () => {
+            log('🚀 Database test tool loaded', 'info');
+            setTimeout(testGetItems, 500);
+        });
+    </script>
+</body>
+</html>

@@ -1,0 +1,367 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Dashboard - Campus Lost & Found</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="min-h-screen bg-gray-50">
+        <div class="dashboard-header">
+            <div class="max-w-7xl mx-auto px-4 py-6">
+                <button class="back-button mb-4" onclick="goHome()">
+                    ← Back to Home
+                </button>
+                <h1 class="text-3xl font-bold text-gray-800">Lost & Found Dashboard</h1>
+            </div>
+        </div>
+
+        <div class="dashboard-content">
+            <div id="message-area"></div>
+            
+            <div class="filter-buttons">
+                <button id="filter-all" class="filter-button filter-button-active" onclick="setFilter('All')">
+                    All Items (<span id="count-all">0</span>)
+                </button>
+                <button id="filter-lost" class="filter-button filter-button-inactive" onclick="setFilter('Lost')">
+                    Lost (<span id="count-lost">0</span>)
+                </button>
+                <button id="filter-found" class="filter-button filter-button-inactive" onclick="setFilter('Found')">
+                    Found (<span id="count-found">0</span>)
+                </button>
+            </div>
+
+            <div id="itemsContainer">
+                <div class="loading-spinner">Loading...</div>
+            </div>
+        </div>
+    </div>
+
+    <script src="js/supabase.js"></script>
+    
+    <script>
+        let allItems = [];
+        let currentFilter = 'All';
+        
+        function goHome() {
+            window.location.href = 'index.html';
+        }
+        
+        function showMessage(message, type = 'success') {
+            const messageArea = document.getElementById('message-area');
+            const className = type === 'error' ? 'error-message' : 'success-message';
+            messageArea.innerHTML = `<div class="${className}">${message}</div>`;
+            
+            // Auto-hide after 3 seconds
+            setTimeout(() => {
+                messageArea.innerHTML = '';
+            }, 3000);
+        }
+        
+        // Load items with robust error handling
+        async function loadItems() {
+            console.log('🔄 Loading items from database...');
+            
+            try {
+                const data = await SupabaseAPI.getItems();
+                console.log('✅ Items loaded successfully:', data);
+                
+                allItems = data;
+                updateCounts();
+                showItems();
+                
+            } catch (error) {
+                console.error('❌ Failed to load items:', error);
+                document.getElementById('itemsContainer').innerHTML = `
+                    <div class="error-message">
+                        <p>Failed to load items: ${error.message}</p>
+                        <button onclick="loadItems()" class="retry-btn" style="margin-top: 10px; padding: 5px 10px; background: #dc2626; color: white; border: none; border-radius: 4px;">
+                            Retry
+                        </button>
+                    </div>
+                `;
+            }
+        }
+        
+        function updateCounts() {
+            const total = allItems.length;
+            const lost = allItems.filter(item => item.status === 'Lost').length;
+            const found = allItems.filter(item => item.status === 'Found').length;
+            
+            document.getElementById('count-all').textContent = total;
+            document.getElementById('count-lost').textContent = lost;
+            document.getElementById('count-found').textContent = found;
+            
+            console.log(`📊 Updated counts - Total: ${total}, Lost: ${lost}, Found: ${found}`);
+        }
+        
+        function setFilter(filter) {
+            currentFilter = filter;
+            console.log('🔍 Filter changed to:', filter);
+            
+            // Update button styles
+            document.querySelectorAll('.filter-button').forEach(btn => {
+                btn.className = 'filter-button filter-button-inactive';
+            });
+            
+            const activeButton = document.getElementById(`filter-${filter.toLowerCase()}`);
+            if (activeButton) {
+                if (filter === 'All') {
+                    activeButton.className = 'filter-button filter-button-active';
+                } else if (filter === 'Lost') {
+                    activeButton.className = 'filter-button filter-button-red-active';
+                } else if (filter === 'Found') {
+                    activeButton.className = 'filter-button filter-button-green-active';
+                }
+            }
+            
+            showItems();
+        }
+        
+        function showItems() {
+            let itemsToShow = allItems;
+            
+            if (currentFilter !== 'All') {
+                itemsToShow = allItems.filter(item => item.status === currentFilter);
+            }
+            
+            console.log(`👀 Displaying ${itemsToShow.length} items for filter: ${currentFilter}`);
+            
+            const container = document.getElementById('itemsContainer');
+            
+            if (itemsToShow.length === 0) {
+                container.innerHTML = `
+                    <div class="no-items">
+                        <p class="text-gray-500 text-lg">No items found for "${currentFilter}"</p>
+                        <button onclick="loadItems()" style="margin-top: 10px; padding: 5px 10px; background: #3b82f6; color: white; border: none; border-radius: 4px;">
+                            Refresh
+                        </button>
+                    </div>
+                `;
+                return;
+            }
+            
+            const itemsHtml = itemsToShow.map(item => createItemCard(item)).join('');
+            container.innerHTML = `<div class="items-grid">${itemsHtml}</div>`;
+        }
+        
+        function createItemCard(item) {
+            console.log(`🖼️ Creating card for: ${item.name}`);
+            console.log(`📷 Photo URL: ${item.photo_url}`);
+            
+            const statusClass = item.status === 'Lost' ? 'status-badge-lost' : 'status-badge-found';
+            
+            // FIXED: Robust image handling
+            let photoSection;
+            if (item.photo_url && 
+                item.photo_url.trim() !== '' &&
+                item.photo_url !== 'null' && 
+                item.photo_url !== 'undefined' &&
+                (item.photo_url.startsWith('http') || item.photo_url.startsWith('data:image'))) {
+                
+                console.log(`✅ Valid photo found for ${item.name}`);
+                photoSection = `
+                    <img src="${item.photo_url}" 
+                         alt="${escapeHtml(item.name)}" 
+                         style="width: 100%; height: 100%; object-fit: cover; display: block;"
+                         onload="console.log('✅ Image loaded: ${item.name}')"
+                         onerror="console.log('❌ Image failed: ${item.name}'); this.style.display='none'; this.nextElementSibling.style.display='flex';">
+                    <div class="no-photo" style="display: none;">
+                        <div class="text-center">
+                            <div style="font-size: 3rem;">📦</div>
+                            <p>Image failed to load</p>
+                        </div>
+                    </div>
+                `;
+            } else {
+                console.log(`⚠️ No valid photo for ${item.name}`);
+                photoSection = `
+                    <div class="no-photo">
+                        <div class="text-center">
+                            <div style="font-size: 3rem;">📦</div>
+                            <p>No photo available</p>
+                        </div>
+                    </div>
+                `;
+            }
+            
+            const date = new Date(item.date).toLocaleDateString();
+            
+            return `
+                <div class="item-card" data-item-id="${item.id}">
+                    <div class="item-image">${photoSection}</div>
+                    <div class="item-content">
+                        <div class="item-header">
+                            <h3 class="item-title">${escapeHtml(item.name)}</h3>
+                            <span class="status-badge ${statusClass}">${item.status}</span>
+                        </div>
+                        <p class="item-description">${escapeHtml(item.description)}</p>
+                        <div class="item-details">
+                            <div class="detail-row">📍 ${escapeHtml(item.location)}</div>
+                            <div class="detail-row">📅 ${date}</div>
+                        </div>
+                        <div class="item-actions">
+                            <button class="action-btn edit-btn" onclick="editItem('${item.id}')">✏️ Edit</button>
+                            <button class="action-btn delivered-btn" onclick="markAsDelivered('${item.id}', '${escapeHtml(item.name)}')">
+                                ✅ ${item.status === 'Lost' ? 'Found' : 'Returned'}
+                            </button>
+                            <button class="action-btn remove-btn" onclick="removeItem('${item.id}', '${escapeHtml(item.name)}')">🗑️ Remove</button>
+                        </div>
+                    </div>
+                </div>
+            `;
+        }
+        
+        function escapeHtml(unsafe) {
+            return unsafe
+                 .replace(/&/g, "&amp;")
+                 .replace(/</g, "&lt;")
+                 .replace(/>/g, "&gt;")
+                 .replace(/"/g, "&quot;")
+                 .replace(/'/g, "&#039;");
+        }
+        
+        // FIXED: Proper delete function with verification
+        async function removeItem(itemId, itemName) {
+            if (!confirm(`Are you sure you want to permanently remove "${itemName}"?`)) {
+                return;
+            }
+            
+            console.log(`🗑️ Attempting to delete item: ${itemId} (${itemName})`);
+            
+            try {
+                // Show loading state
+                const itemCard = document.querySelector(`[data-item-id="${itemId}"]`);
+                if (itemCard) {
+                    itemCard.style.opacity = '0.5';
+                    itemCard.style.pointerEvents = 'none';
+                }
+                
+                // Delete from database
+                const result = await SupabaseAPI.deleteItem(itemId);
+                console.log('✅ Delete operation result:', result);
+                
+                // Remove from local array
+                allItems = allItems.filter(item => item.id !== itemId);
+                
+                // Update display
+                updateCounts();
+                showItems();
+                
+                showMessage(`✅ "${itemName}" has been permanently removed!`, 'success');
+                
+            } catch (error) {
+                console.error('❌ Delete failed:', error);
+                showMessage(`❌ Failed to remove "${itemName}": ${error.message}`, 'error');
+                
+                // Restore item card if delete failed
+                const itemCard = document.querySelector(`[data-item-id="${itemId}"]`);
+                if (itemCard) {
+                    itemCard.style.opacity = '1';
+                    itemCard.style.pointerEvents = 'auto';
+                }
+            }
+        }
+        
+        // FIXED: Proper delivered function
+        async function markAsDelivered(itemId, itemName) {
+            const item = allItems.find(i => i.id === itemId);
+            if (!item) {
+                showMessage('❌ Item not found!', 'error');
+                return;
+            }
+            
+            const actionText = item.status === 'Lost' ? 'found and returned to owner' : 'returned to its owner';
+            
+            if (!confirm(`Mark "${itemName}" as ${actionText}? This will remove it from the system.`)) {
+                return;
+            }
+            
+            console.log(`✅ Marking as delivered: ${itemId} (${itemName})`);
+            
+            try {
+                // Show loading state
+                const itemCard = document.querySelector(`[data-item-id="${itemId}"]`);
+                if (itemCard) {
+                    itemCard.style.opacity = '0.5';
+                    itemCard.style.pointerEvents = 'none';
+                }
+                
+                // Delete from database (delivered = removed)
+                const result = await SupabaseAPI.deleteItem(itemId);
+                console.log('✅ Delivered operation result:', result);
+                
+                // Remove from local array
+                allItems = allItems.filter(item => item.id !== itemId);
+                
+                // Update display
+                updateCounts();
+                showItems();
+                
+                showMessage(`✅ "${itemName}" marked as delivered and removed!`, 'success');
+                
+            } catch (error) {
+                console.error('❌ Mark delivered failed:', error);
+                showMessage(`❌ Failed to mark "${itemName}" as delivered: ${error.message}`, 'error');
+                
+                // Restore item card if operation failed
+                const itemCard = document.querySelector(`[data-item-id="${itemId}"]`);
+                if (itemCard) {
+                    itemCard.style.opacity = '1';
+                    itemCard.style.pointerEvents = 'auto';
+                }
+            }
+        }
+        
+        // Placeholder edit function
+        function editItem(itemId) {
+            const item = allItems.find(i => i.id === itemId);
+            if (item) {
+                alert(`Edit functionality for "${item.name}" - Coming soon!`);
+            }
+        }
+        
+        // Initialize dashboard
+        document.addEventListener('DOMContentLoaded', () => {
+            console.log('📱 Dashboard initialized');
+            loadItems();
+        });
+        
+        // Add refresh button functionality
+        window.addEventListener('focus', () => {
+            console.log('🔄 Window focused - refreshing data');
+            loadItems();
+        });
+    </script>
+    
+    <style>
+        .retry-btn, .refresh-btn {
+            background: #3b82f6;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            margin-top: 10px;
+        }
+        
+        .retry-btn:hover, .refresh-btn:hover {
+            background: #2563eb;
+        }
+        
+        /* Loading states */
+        .item-card[style*="opacity: 0.5"] {
+            transition: opacity 0.3s;
+        }
+        
+        /* Better no-items display */
+        .no-items {
+            text-align: center;
+            padding: 3rem;
+            color: #6b7280;
+        }
+    </style>
+</body>
+</html>

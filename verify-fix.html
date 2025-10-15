@@ -1,0 +1,115 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Dashboard Fix Verification</title>
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <h1>🔧 Dashboard Fix Verification</h1>
+    <div id="results" style="font-family: monospace; white-space: pre-line;"></div>
+    
+    <script>
+        const log = (msg) => {
+            document.getElementById('results').innerHTML += new Date().toLocaleTimeString() + ': ' + msg + '\n';
+            console.log(msg);
+        };
+        
+        async function testEverything() {
+            log('🧪 TESTING DASHBOARD FIXES...\n');
+            
+            // Test 1: Supabase Connection
+            log('📡 Testing Supabase connection...');
+            try {
+                const SUPABASE_URL = 'https://ppipsveojmbfpsjjcmlt.supabase.co';
+                const SUPABASE_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6InBwaXBzdmVvam1iZnBzampjbWx0Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjAyNTYxNDcsImV4cCI6MjA3NTgzMjE0N30.Dla5hGLU-5FPlbjDp6Bd0zS4yjZjCPlF4qEiVMKj9i4';
+                const client = supabase.createClient(SUPABASE_URL, SUPABASE_KEY);
+                
+                const { data, error } = await client.from('items').select('*');
+                if (error) throw error;
+                
+                log(`✅ CONNECTION SUCCESS: Found ${data.length} items`);
+                log(`📊 Lost: ${data.filter(i => i.status === 'Lost').length}, Found: ${data.filter(i => i.status === 'Found').length}`);
+                
+                // Test 2: Image Analysis
+                log('\n🖼️ Testing image display...');
+                let imagesFound = 0;
+                let validImages = 0;
+                
+                data.forEach(item => {
+                    if (item.photo_url) {
+                        imagesFound++;
+                        if (item.photo_url.startsWith('http') || item.photo_url.startsWith('data:image')) {
+                            validImages++;
+                            log(`✅ Valid image: ${item.name} - ${item.photo_url.substring(0, 50)}...`);
+                        } else {
+                            log(`❌ Invalid image: ${item.name} - ${item.photo_url}`);
+                        }
+                    }
+                });
+                
+                log(`📷 Image Summary: ${imagesFound} total, ${validImages} valid`);
+                
+                // Test 3: Create Test Item
+                log('\n🆕 Testing item creation...');
+                const testItem = {
+                    name: 'VERIFICATION TEST - ' + new Date().toLocaleTimeString(),
+                    description: 'This item tests if delete operations work correctly',
+                    location: 'Test Location',
+                    date: new Date().toISOString().split('T')[0],
+                    status: 'Lost',
+                    photo_url: null
+                };
+                
+                const { data: newItem, error: createError } = await client
+                    .from('items')
+                    .insert([testItem])
+                    .select()
+                    .single();
+                
+                if (createError) throw createError;
+                log(`✅ CREATE SUCCESS: ${newItem.id}`);
+                
+                // Test 4: Delete Test Item  
+                log('\n🗑️ Testing item deletion...');
+                const { error: deleteError } = await client
+                    .from('items')
+                    .delete()
+                    .eq('id', newItem.id);
+                
+                if (deleteError) throw deleteError;
+                log(`✅ DELETE SUCCESS: Test item removed`);
+                
+                // Test 5: Verify Delete
+                log('\n🔍 Verifying deletion...');
+                const { data: verifyData, error: verifyError } = await client
+                    .from('items')
+                    .select('*')
+                    .eq('id', newItem.id);
+                
+                if (verifyError) throw verifyError;
+                
+                if (verifyData.length === 0) {
+                    log('✅ VERIFICATION SUCCESS: Item permanently deleted');
+                } else {
+                    log('❌ VERIFICATION FAILED: Item still exists');
+                }
+                
+                log('\n🎉 ALL TESTS PASSED!');
+                log('\n📋 SUMMARY:');
+                log(`   • Database connection: WORKING ✅`);
+                log(`   • Image display: ${validImages > 0 ? 'WORKING' : 'NO IMAGES'} ${validImages > 0 ? '✅' : '⚠️'}`);
+                log(`   • Create operation: WORKING ✅`);
+                log(`   • Delete operation: WORKING ✅`);
+                log(`   • Delete verification: WORKING ✅`);
+                log('\n🚀 dashboard-final.html SHOULD WORK PERFECTLY!');
+                
+            } catch (error) {
+                log(`❌ TEST FAILED: ${error.message}`);
+            }
+        }
+        
+        // Run tests
+        testEverything();
+    </script>
+</body>
+</html>

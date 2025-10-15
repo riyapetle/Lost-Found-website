@@ -1,0 +1,268 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Report Found Item - Campus Lost & Found</title>
+    <link rel="stylesheet" href="css/styles.css">
+    <script src="https://unpkg.com/@supabase/supabase-js@2"></script>
+</head>
+<body>
+    <div class="form-container bg-gradient-found form-transition">
+        <div class="form-wrapper">
+            <button class="back-button" onclick="Navigation.navigateTo('home')">
+                <svg class="icon mr-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                    <path d="M19 12H5"/>
+                    <polyline points="12,19 5,12 12,5"/>
+                </svg>
+                Back to Home
+            </button>
+
+            <div class="form-card">
+                <h1 class="form-title">Report a Found Item</h1>
+                <p class="form-subtitle">Help someone find their lost item by providing details</p>
+
+                <form id="foundItemForm" class="space-y-6">
+                    <div class="form-group">
+                        <label class="form-label">
+                            Item Name <span class="required">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="name"
+                            name="name"
+                            required
+                            class="form-input focus-green"
+                            placeholder="e.g., Blue Backpack"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Description <span class="required">*</span>
+                        </label>
+                        <textarea
+                            id="description"
+                            name="description"
+                            required
+                            rows="4"
+                            class="form-textarea focus-green"
+                            placeholder="Describe the item in detail..."
+                        ></textarea>
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Location Found <span class="required">*</span>
+                        </label>
+                        <input
+                            type="text"
+                            id="location"
+                            name="location"
+                            required
+                            class="form-input focus-green"
+                            placeholder="e.g., Library 2nd Floor"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Date Found <span class="required">*</span>
+                        </label>
+                        <input
+                            type="date"
+                            id="date"
+                            name="date"
+                            required
+                            class="form-input focus-green"
+                        />
+                    </div>
+
+                    <div class="form-group">
+                        <label class="form-label">
+                            Photo (Recommended) <span class="required">*</span>
+                        </label>
+                        <div class="upload-area" id="uploadArea">
+                            <input
+                                type="file"
+                                id="photo"
+                                name="photo"
+                                accept="image/*"
+                                class="upload-input"
+                                required
+                            />
+                            <label for="photo" class="cursor-pointer">
+                                <div id="uploadContent">
+                                    <svg class="icon-lg text-gray-400 mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                                        <polyline points="7,10 12,5 17,10"/>
+                                        <line x1="12" y1="5" x2="12" y2="15"/>
+                                    </svg>
+                                    <p class="text-gray-600">Click to upload a photo</p>
+                                    <p class="text-xs text-gray-500 mt-2">Photo helps owners identify their item</p>
+                                </div>
+                            </label>
+                        </div>
+                    </div>
+
+                    <button
+                        type="submit"
+                        id="submitButton"
+                        class="submit-button submit-button-green"
+                    >
+                        Submit Found Item Report
+                    </button>
+                </form>
+            </div>
+        </div>
+    </div>
+
+    <!-- Load JavaScript utilities -->
+    <script src="js/navigation.js"></script>
+    <script src="js/supabase.js"></script>
+    <script src="js/cloudinary.js"></script>
+
+    <script>
+        class FoundItemForm {
+            constructor() {
+                this.form = document.getElementById('foundItemForm');
+                this.photoInput = document.getElementById('photo');
+                this.uploadArea = document.getElementById('uploadArea');
+                this.uploadContent = document.getElementById('uploadContent');
+                this.submitButton = document.getElementById('submitButton');
+                
+                this.photoFile = null;
+                this.photoPreview = null;
+                
+                this.initializeEventListeners();
+                this.setDefaultDate();
+            }
+
+            initializeEventListeners() {
+                this.form.addEventListener('submit', this.handleSubmit.bind(this));
+                this.photoInput.addEventListener('change', this.handlePhotoChange.bind(this));
+            }
+
+            setDefaultDate() {
+                document.getElementById('date').value = UIUtils.getTodayDateString();
+            }
+
+            async handlePhotoChange(e) {
+                const file = e.target.files[0];
+                if (!file) {
+                    this.resetPhotoPreview();
+                    return;
+                }
+
+                // Validate file
+                const validation = CloudinaryAPI.validateImageFile(file);
+                if (!validation.isValid) {
+                    UIUtils.showError(this.form, validation.errors.join(', '));
+                    this.resetPhotoPreview();
+                    return;
+                }
+
+                this.photoFile = file;
+
+                try {
+                    const previewUrl = await CloudinaryAPI.createPreviewUrl(file);
+                    this.showPhotoPreview(previewUrl);
+                } catch (error) {
+                    console.error('Error creating preview:', error);
+                    UIUtils.showError(this.form, 'Failed to preview image');
+                }
+            }
+
+            showPhotoPreview(previewUrl) {
+                this.uploadContent.innerHTML = `
+                    <img src="${previewUrl}" alt="Preview" class="upload-preview" />
+                    <p class="text-gray-600">Click to change photo</p>
+                `;
+            }
+
+            resetPhotoPreview() {
+                this.photoFile = null;
+                this.uploadContent.innerHTML = `
+                    <svg class="icon-lg text-gray-400 mx-auto mb-2" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round">
+                        <path d="M21 15v4a2 2 0 01-2 2H5a2 2 0 01-2-2v-4"/>
+                        <polyline points="7,10 12,5 17,10"/>
+                        <line x1="12" y1="5" x2="12" y2="15"/>
+                    </svg>
+                    <p class="text-gray-600">Click to upload a photo</p>
+                    <p class="text-xs text-gray-500 mt-2">Photo helps owners identify their item</p>
+                `;
+            }
+
+            async handleSubmit(e) {
+                e.preventDefault();
+                
+                UIUtils.hideError(this.form);
+                UIUtils.setButtonLoading(this.submitButton, true, 'Submitting...');
+
+                try {
+                    // Get form data
+                    const formData = new FormData(this.form);
+                    const itemData = {
+                        name: formData.get('name').trim(),
+                        description: formData.get('description').trim(),
+                        location: formData.get('location').trim(),
+                        date: formData.get('date'),
+                        status: 'Found',
+                        photo_url: null
+                    };
+
+                    // Validate data
+                    const validation = SupabaseAPI.validateItem(itemData);
+                    if (!validation.isValid) {
+                        throw new Error(validation.errors.join(', '));
+                    }
+
+                    // For found items, we strongly encourage a photo
+                    if (!this.photoFile) {
+                        const confirmed = confirm('Are you sure you want to submit without a photo? Photos help owners identify their items more easily.');
+                        if (!confirmed) {
+                            return;
+                        }
+                    }
+
+                    // Upload photo if provided
+                    if (this.photoFile) {
+                        try {
+                            itemData.photo_url = await CloudinaryAPI.uploadImage(this.photoFile);
+                        } catch (error) {
+                            console.error('Photo upload failed:', error);
+                            throw new Error('Photo upload failed. Please try again with a different photo.');
+                        }
+                    }
+
+                    // Create item in database
+                    await SupabaseAPI.createItem(itemData);
+                    
+                    // Redirect to dashboard
+                    Navigation.navigateTo('dashboard');
+                    
+                } catch (error) {
+                    console.error('Error submitting form:', error);
+                    UIUtils.showError(this.form, error.message || 'Failed to submit item');
+                } finally {
+                    UIUtils.setButtonLoading(this.submitButton, false);
+                }
+            }
+        }
+
+        // Initialize form when page loads
+        document.addEventListener('DOMContentLoaded', () => {
+            Navigation.initPageAnimations();
+            new FoundItemForm();
+        });
+    </script>
+
+    <style>
+        /* Custom focus styles for found form (green theme) */
+        .focus-green:focus {
+            box-shadow: 0 0 0 2px #16a34a;
+            border-color: transparent;
+        }
+    </style>
+</body>
+</html>
